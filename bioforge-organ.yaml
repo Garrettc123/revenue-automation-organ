@@ -1,0 +1,86 @@
+id: revenue-automation
+family: Revenue
+version: 0.1.0
+display_name: Revenue Automation Organ
+purpose: Snap-on full-stack sales and revenue loop that turns platform and architect offers into paid, fulfilled orders with ZEUS proof gating and RHNS substrate.
+
+ports:
+  requires:
+    - core.identity
+    - core.events
+    - core.audit
+    - core.billing
+    - rhns.cmc
+  provides:
+    - revenue.checkout
+    - revenue.fulfillment
+    - revenue.sync
+
+events:
+  in:
+    - name: checkout.session.completed
+      schema: StripeSession
+    - name: lead.captured
+      schema: LeadCaptured
+  out:
+    - name: order.fulfilled
+      schema: OrderFulfilled
+    - name: revenue.logged
+      schema: RevenueEvent
+
+schema:
+  objects:
+    - Order
+    - RevenueEvent
+  migrations: []
+
+policy:
+  scope:
+    - billing.read
+    - billing.write
+    - crm.write
+  forbidden:
+    - billing.refund
+
+health:
+  probes:
+    - liveness
+    - readiness
+  signals:
+    degraded: webhook latency > 2s
+    blocked: missing Stripe secret or proof_hash
+
+rhns:
+  planner: rgt+hrm
+  gate: cmc
+  commit_required_for:
+    - fulfillment.trigger
+    - outreach.send
+  memory: federated-kg
+  audit: ledger
+
+detach:
+  order:
+    - deactivate Stripe webhook
+    - freeze CRM writes
+    - export revenue ledger
+    - drop routes
+  retains:
+    - audit ledger rows
+    - proof certificates
+  rollback: restore last certified schema version
+
+pricing:
+  sku: MARS-750
+  pack: Revenue
+  model: snap-module
+  interval: monthly
+  notes: proof_hash=94ffa6a67cdd9ecab694d4fd6f0fae5a325b30e974d332ae7df91b987864e010 (simulate)
+
+skeleton_hops:
+  - intake
+  - enrichment
+  - checkout
+  - crm
+  - fulfillment
+  - reporting
